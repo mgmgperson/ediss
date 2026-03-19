@@ -17,18 +17,18 @@ import type { NewBook } from '../types/book.js';
 export async function createBookHandler(req: Request, res: Response): Promise<void> {
     try {
         if (!isValidBookBody(req.body)) {
-        res.sendStatus(400);
-        return;
+            res.sendStatus(400);
+            return;
         }
 
         const book = req.body;
 
         const exists = await bookExistsByIsbn(book.ISBN);
         if (exists) {
-        res.status(422).json({
-            message: 'This ISBN already exists in the system.',
-        });
-        return;
+            res.status(422).json({
+                message: 'This ISBN already exists in the system.',
+            });
+            return;
         }
 
         await createBook({
@@ -39,7 +39,7 @@ export async function createBookHandler(req: Request, res: Response): Promise<vo
             genre: book.genre,
             price: book.price,
             quantity: book.quantity,
-            summary: null,
+            summary: 'Summary pending...',
         });
 
         const newBook: NewBook = {
@@ -52,27 +52,33 @@ export async function createBookHandler(req: Request, res: Response): Promise<vo
             quantity: book.quantity,
         };
 
-        (async () => {
+        void (async () => {
             try {
                 const summary = await generateBookSummary(newBook);
                 await updateBookSummary(newBook.ISBN, summary);
             } catch (error) {
                 console.error(`Failed to generate/store summary for ISBN ${newBook.ISBN}:`, error);
+
+                const fallbackSummary =
+                    `${newBook.title} is a ${newBook.genre} book by ${newBook.Author}. ` +
+                    `${newBook.description}`;
+
+                await updateBookSummary(newBook.ISBN, fallbackSummary);
             }
-        })().catch(() => {});
+        })();
 
         res
-        .status(201)
-        .location(`/books/${book.ISBN}`)
-        .json({
-            ISBN: book.ISBN,
-            title: book.title,
-            Author: book.Author,
-            description: book.description,
-            genre: book.genre,
-            price: book.price,
-            quantity: book.quantity,
-        });
+            .status(201)
+            .location(`/books/${book.ISBN}`)
+            .json({
+                ISBN: book.ISBN,
+                title: book.title,
+                Author: book.Author,
+                description: book.description,
+                genre: book.genre,
+                price: book.price,
+                quantity: book.quantity,
+            });
     } catch (error) {
         console.error('createBookHandler error:', error);
         res.sendStatus(500);
@@ -107,43 +113,48 @@ export async function updateBookHandler(req: Request, res: Response): Promise<vo
         const isbn = getIsbnParam(req.params.ISBN);
 
         if (!isbn || !isValidBookBody(req.body)) {
-        res.sendStatus(400);
-        return;
+            res.sendStatus(400);
+            return;
         }
 
         const book = req.body;
 
+        if (book.ISBN !== isbn) {
+            res.sendStatus(400);
+            return;
+        }
+
         const updated = await updateBookByIsbn(isbn, {
-        ISBN: book.ISBN,
-        title: book.title,
-        Author: book.Author,
-        description: book.description,
-        genre: book.genre,
-        price: book.price,
-        quantity: book.quantity,
-        summary: null,
+            ISBN: book.ISBN,
+            title: book.title,
+            Author: book.Author,
+            description: book.description,
+            genre: book.genre,
+            price: book.price,
+            quantity: book.quantity,
+            summary: null,
         });
 
         if (!updated) {
-        res.sendStatus(404);
-        return;
+            res.sendStatus(404);
+            return;
         }
 
         const freshBook = await getBookByIsbn(isbn);
 
         if (!freshBook) {
-        res.sendStatus(404);
-        return;
+            res.sendStatus(404);
+            return;
         }
 
         res.status(200).json({
-        ISBN: freshBook.ISBN,
-        title: freshBook.title,
-        Author: freshBook.Author,
-        description: freshBook.description,
-        genre: freshBook.genre,
-        price: freshBook.price,
-        quantity: freshBook.quantity,
+            ISBN: freshBook.ISBN,
+            title: freshBook.title,
+            Author: freshBook.Author,
+            description: freshBook.description,
+            genre: freshBook.genre,
+            price: freshBook.price,
+            quantity: freshBook.quantity,
         });
     } catch (error) {
         console.error('updateBookHandler error:', error);

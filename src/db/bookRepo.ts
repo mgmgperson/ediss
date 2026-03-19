@@ -4,17 +4,34 @@ import type { Book, NewBook } from '../types/book.js';
 
 type BookRow = Book & RowDataPacket;
 
-export async function getBookByIsbn(ISBN: string): Promise<Book | null> {
-    const [rows] = await pool.query<BookRow[]>(
-        `
-        SELECT ISBN, title, Author, description, genre, price, quantity, summary
-        FROM books
-        WHERE ISBN = ?
-        `,
-        [ISBN]
-    );
+type RawBookRow = Omit<Book, 'price'> & {
+  price: string | number;
+} & RowDataPacket;
 
-    return rows[0] ?? null;
+function normalizeBook(row: RawBookRow): Book {
+  return {
+    ISBN: row.ISBN,
+    title: row.title,
+    Author: row.Author,
+    description: row.description,
+    genre: row.genre,
+    price: Number(row.price),
+    quantity: row.quantity,
+    summary: row.summary,
+  };
+}
+
+export async function getBookByIsbn(ISBN: string): Promise<Book | null> {
+  const [rows] = await pool.query<RawBookRow[]>(
+    `
+    SELECT ISBN, title, Author, description, genre, price, quantity, summary
+    FROM books
+    WHERE ISBN = ?
+    `,
+    [ISBN]
+  );
+
+  return rows[0] ? normalizeBook(rows[0]) : null;
 }
 
 export async function createBook(book: NewBook): Promise<void> {
