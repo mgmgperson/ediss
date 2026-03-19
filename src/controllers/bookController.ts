@@ -4,11 +4,15 @@ import {
     createBook,
     getBookByIsbn,
     updateBookByIsbn,
+    updateBookSummary
 } from '../db/bookRepo.js';
 import {
     getIsbnParam,
     isValidBookBody,
 } from '../validations/bookValidation.js';
+import { generateBookSummary } from '../services/llmService.js';
+import type { NewBook } from '../types/book.js';
+
 
 export async function createBookHandler(req: Request, res: Response): Promise<void> {
     try {
@@ -28,15 +32,34 @@ export async function createBookHandler(req: Request, res: Response): Promise<vo
         }
 
         await createBook({
-        ISBN: book.ISBN,
-        title: book.title,
-        Author: book.Author,
-        description: book.description,
-        genre: book.genre,
-        price: book.price,
-        quantity: book.quantity,
-        summary: null,
+            ISBN: book.ISBN,
+            title: book.title,
+            Author: book.Author,
+            description: book.description,
+            genre: book.genre,
+            price: book.price,
+            quantity: book.quantity,
+            summary: null,
         });
+
+        const newBook: NewBook = {
+            ISBN: book.ISBN,
+            title: book.title,
+            Author: book.Author,
+            description: book.description,
+            genre: book.genre,
+            price: book.price,
+            quantity: book.quantity,
+        };
+
+        (async () => {
+            try {
+                const summary = await generateBookSummary(newBook);
+                await updateBookSummary(newBook.ISBN, summary);
+            } catch (error) {
+                console.error(`Failed to generate/store summary for ISBN ${newBook.ISBN}:`, error);
+            }
+        })().catch(() => {});
 
         res
         .status(201)
@@ -50,7 +73,6 @@ export async function createBookHandler(req: Request, res: Response): Promise<vo
             price: book.price,
             quantity: book.quantity,
         });
-        // todo: add llm summary
     } catch (error) {
         console.error('createBookHandler error:', error);
         res.sendStatus(500);
